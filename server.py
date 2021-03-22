@@ -1,5 +1,5 @@
 #! python3
-from flask import Flask
+from flask import Flask, request
 from flask_socketio import SocketIO
 from inference import ModelManager, TextSampler
 import threading
@@ -29,7 +29,7 @@ def get_client(sid):
     return client
 
 @socketio.on('start_new_sampler')
-def start_new_sampler(sampler_name, model_name, prefix, parameters):
+def start_new_sampler(sampler_name, model_name, prefix, parameters={}):
     """
     Create a new sampler for a client. Sampling starts immediately.
 
@@ -84,6 +84,8 @@ def after_text_sampled(sid, sampler_name, continue_sampling):
     The client should return a value continue_sampling to indicate
     whether the sampling should continue. If not, cleanups should be done
     """
+    client = get_client(sid)
+    if client == None: return
     if continue_sampling:
         sampler_serve_next(sid, sampler_name)
     else:
@@ -100,7 +102,7 @@ def on_connect():
             print(f"WARN: Client already existed for the same sid ({request.sid}). Might indicate serious memory leak. Attempting to cleanup.")
             _free_client_resources(request.sid)
         connected_clients[request.sid] = ClientInfo()
-    print(f"Client connected! sid={request.sid}")
+    print(f"Client connected!    sid={request.sid}")
 
 @socketio.on('disconnect')
 def on_disconnect():
@@ -111,15 +113,19 @@ def on_disconnect():
         else:
             _free_client_resources(request.sid)
             del connected_clients[request.sid]
-    print(f"Client disconnected! sid={request.sid}")
+    print(f"Client disconnected!    sid={request.sid}")
+
 
 # This call is destructive, causes the client in an unusable state.
 # The client should be removed immediately after the call
 def _free_client_resources(sid):
     client = connected_clients[sid]
     with client.lock:
-        for sampler in client.samplers:
+        for sampler in client.samplers.values():
             model_manager.free_model(sampler.model_info.name)
         client.samplers.clear()
         client.samplers = None # Causes further access to samplers crash early as it is not intended
     model_manager.free_resources()
+
+if __name__ == '__main__':
+    socketio.run(app, debug=True)

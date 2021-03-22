@@ -153,8 +153,8 @@ class TextSampler():
             # Update past to save computation time
             past = outputs.past_key_values
             # The maximum context of gpt2 is 1024 tokens
-            if past[0].size()[3] >= 1024:
-                # If the sequence length has exceeded, discard past and use context_ids
+            if len(context_ids[0]) >= 1024:
+                # If the sequence length has exceeded, discard past and use the last 512 tokens of context_ids
                 # This indicates the next split of text generation
                 past = None
                 context_ids = context_ids[:,-512:]

@@ -1,4 +1,5 @@
 #! python3
+import time
 from flask import Flask, request
 from flask_socketio import SocketIO
 from inference import ModelManager, TextSampler
@@ -27,6 +28,36 @@ def get_client(sid):
     if not client:
         print(f"WARN: Unable to get client for sid={sid}.")
     return client
+
+@socketio.on('generate_text')
+def generate_text(task_name, model_name, prefix, max_length, parameters={}, num=1):
+    """
+    Generates num number of sequences that is at most max_length tokens long
+
+    Parameters:
+        task_name:
+            A name chosen by the client to identify the task.
+        model_name:
+            Name of model to be used
+        prefix:
+            The text before generation (Input prompt)
+        length:
+            Length of the text
+        parameters:
+            A dictionary with additional parameters given to the sampler.
+
+    """
+    num = min(num, 10) # Limit max number of sequences to 10
+    max_length = min(max_length, 50) # Limit max_length to 50
+    client = get_client(request.sid)
+    if client == None: return
+    with model_manager.use_model(model_name) as model_info:
+        sampler = TextSampler(model_info, **parameters)
+        result = [sampler.generate_text_atmost(prefix, max_length) for i in range(num)]
+    socketio.emit('on_generate_completed',
+        (task_name, result,),
+        to=request.sid
+    )
 
 @socketio.on('start_new_sampler')
 def start_new_sampler(sampler_name, model_name, prefix, parameters={}):
@@ -60,11 +91,17 @@ def sampler_serve_next(sid, sampler_name):
     sampler = client.samplers.get(sampler_name, None)
     if not sampler:
         print(f"WARN: Unable to get sampler {sampler_name} from client {sid}.")
+    # Sample as much text in 0.5 seconds
+    sampled_text = []
     with sampler.lock:
-        sampled_text = next(sampler.generator, None)
-    if sampled_text != None:
-        socketio.emit('on_text_sampled',
-            (sampler_name, sampled_text,),
+        start_time = time.monotonic()
+        for text in sampler.generator:
+            sampled_text.append(text)
+            if time.monotonic() - start_time > 0.5:
+                break
+    if len(sampled_text) > 0:
+        socketio.emit('on_text',
+            (sampler_name, ''.join(sampled_text),),
             to=sid,
             callback=lambda continue_sampling=False, *args: after_text_sampled(sid, sampler_name, continue_sampling)
         )
@@ -90,6 +127,9 @@ def after_text_sampled(sid, sampler_name, continue_sampling):
         sampler_serve_next(sid, sampler_name)
     else:
         # Clean up sampler
+        sampler = client.samplers.get(sampler_name, None)
+        if not sampler:
+            print(f"WARN: Unable to get sampler {sampler_name} from client {sid}. Unable to cleanup.")
         with client.lock:
             model_manager.free_model(sampler.model_info.name)
             del client.samplers[sampler_name]

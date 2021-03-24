@@ -74,7 +74,8 @@ class ModelManager():
 class TextSampler():
     def __init__(self, model_info: ModelInfo, **kwargs):
         self.model_info = model_info
-        # min_length should be less than 512
+        # min_length determine how many addition token to be generated before considering stopping
+        # min_length can only guarantee (prefix + generated text) is at least 0 - 512 tokens long
         self.min_length = min(kwargs.get('min_length', 10), 512)
         self.temperature = kwargs.get('temperature', 1.0)
         self.top_k = kwargs.get('top_k', 0)
@@ -105,8 +106,9 @@ class TextSampler():
         # Set up logits processors for basic sampling task
         logits_processors = LogitsProcessorList()
 
-        # Prevent EOS from being generated before min_length is reached
-        logits_processors.append(MinLengthLogitsProcessor(self.min_length, eos_token_id))
+        # Prevent EOS from being generated before min_length tokens are generated
+        min_length = min(self.min_length + len(input_ids[0]), 512)
+        logits_processors.append(MinLengthLogitsProcessor(min_length, eos_token_id))
         # Use Temperature modifier to modify distribution
         if self.temperature != 1.0:
             logits_processors.append(TemperatureLogitsWarper(self.temperature))
@@ -143,7 +145,7 @@ class TextSampler():
             # Save next token to context_ids
             context_ids = torch.cat([context_ids,next_token[:, None]], dim=-1)
             # Tries to decode the tokens got so far
-            decode_buff = torch.cat([decode_buff,next_token], dim=-1)
+            decode_buff = torch.cat([decode_buff,next_token])
             decoded = tokenizer.decode(decode_buff)
             # Some characters span multiple tokens (BPE)
             # Therefore, only yield a result when decode is successful

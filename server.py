@@ -5,8 +5,8 @@ from flask_socketio import SocketIO
 from inference import ModelManager, TextSampler
 import threading
 
-app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+app = Flask(__name__, static_url_path='/', static_folder='static/')
+socketio = SocketIO(app, cors_allowed_origins="*", static_url_path='/', static_folder='static/')
 model_manager = ModelManager()
 
 connected_clients = {}
@@ -28,6 +28,10 @@ def get_client(sid):
     if not client:
         print(f"WARN: Unable to get client for sid={sid}.")
     return client
+
+@app.route('/')
+def root():
+    return app.send_static_file('index.html')
 
 @socketio.on('generate_text')
 def generate_text(task_name, model_name, prefix, max_length, parameters={}, num=1):

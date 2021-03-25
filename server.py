@@ -51,9 +51,11 @@ def generate_text(task_name, model_name, prefix, max_length, parameters={}, num=
     max_length = min(max_length, 50) # Limit max_length to 50
     client = get_client(request.sid)
     if client == None: return
-    with model_manager.use_model(model_name) as model_info:
-        sampler = TextSampler(model_info, **parameters)
-        result = [sampler.generate_text_atmost(prefix, max_length) for i in range(num)]
+    result = []
+    if prefix and not prefix.isspace():
+        with model_manager.use_model(model_name) as model_info:
+            sampler = TextSampler(model_info, **parameters)
+            result = [sampler.generate_text_atmost(prefix, max_length) for i in range(num)]
     socketio.emit('on_generate_completed',
         (task_name, result,),
         to=request.sid
@@ -77,6 +79,12 @@ def start_new_sampler(sampler_name, model_name, prefix, parameters={}):
     """
     client = get_client(request.sid)
     if client == None: return
+    if not prefix or prefix.isspace():
+        socketio.emit('on_text_sample_completed',
+            sampler_name,
+            to=request.sid
+        )
+        return
     with client.lock:
         if sampler_name in client.samplers:
             model_manager.free_model(client.samplers[sampler_name].model_info.name)

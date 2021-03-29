@@ -6,7 +6,7 @@ from inference import ModelManager, TextSampler
 import threading
 
 app = Flask(__name__, static_url_path='/', static_folder='static/')
-socketio = SocketIO(app, cors_allowed_origins="*", static_url_path='/', static_folder='static/')
+socketio = SocketIO(app, ping_timeout=60, cors_allowed_origins="*", static_url_path='/', static_folder='static/')
 model_manager = ModelManager()
 
 connected_clients = {}

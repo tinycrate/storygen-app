@@ -112,12 +112,12 @@ class TextSampler():
         # Use Temperature modifier to modify distribution
         if self.temperature != 1.0:
             logits_processors.append(TemperatureLogitsWarper(self.temperature))
-        # Use top_k filtering
-        if self.top_k > 0:
-            logits_processors.append(TopKLogitsWarper(top_k=self.top_k, min_tokens_to_keep=1))
         # Use top_p filtering
         if self.top_p < 1.0:
             logits_processors.append(TopPLogitsWarper(top_p=self.top_p, min_tokens_to_keep=1))
+        # Use top_k filtering
+        if self.top_k > 0:
+            logits_processors.append(TopKLogitsWarper(top_k=self.top_k, min_tokens_to_keep=1))
 
         # Past tracks previous weighting to be reused
         past=None

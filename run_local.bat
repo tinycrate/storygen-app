@@ -19,6 +19,7 @@ if errorlevel 1 GOTO ERROR_INSTALL
 
 :RUN_SERVER
 CLS
+START /b CMD /c "TIMEOUT /T 5 /NOBREAK > nul && START http://127.0.0.1:5000"
 python server.py
 EXIT
 
